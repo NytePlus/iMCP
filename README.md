@@ -9,6 +9,27 @@ It works with [Claude Desktop][claude-app]
 and a [growing list of clients][mcp-clients] that support the
 [Model Context Protocol (MCP)][mcp].
 
+## WeChat development fork
+
+This repository is a fork of [mattt/iMCP](https://github.com/mattt/iMCP).
+The custom implementation lives on `codex/wechat-integration`. The Rust backend
+at `Backends/WeChat` is a Git submodule of
+[NytePlus/wx-cli](https://github.com/NytePlus/wx-cli), itself a fork of
+`pandorafuture/wx-cli`. Both upstream MIT licenses are retained.
+
+```sh
+git clone --recurse-submodules --branch codex/wechat-integration https://github.com/NytePlus/iMCP.git
+cd iMCP
+# For an existing checkout:
+git submodule update --init --recursive
+```
+
+The WeChat module supports authorized historical-message queries and media.
+**Real-time synchronization is not yet enabled.** See the
+[implementation status](Docs/WeChat/IMPLEMENTATION.md) and
+[fork/submodule workflow](Docs/WeChat/REPOSITORIES.md) before building.
+The upstream installation instructions below install upstream iMCP, not this fork.
+
 ## Capabilities
 
 <table>

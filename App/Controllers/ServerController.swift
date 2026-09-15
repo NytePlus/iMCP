@@ -56,6 +56,7 @@ enum ServiceRegistry {
             LocationService.shared,
             MapsService.shared,
             MessageService.shared,
+            WeChatService.shared,
             PhoneService.shared,
             RemindersService.shared,
             ShortcutsService.shared,
@@ -74,6 +75,7 @@ enum ServiceRegistry {
         locationEnabled: Binding<Bool>,
         mapsEnabled: Binding<Bool>,
         messagesEnabled: Binding<Bool>,
+        wechatEnabled: Binding<Bool>,
         phoneEnabled: Binding<Bool>,
         remindersEnabled: Binding<Bool>,
         shortcutsEnabled: Binding<Bool>,
@@ -81,6 +83,8 @@ enum ServiceRegistry {
         weatherEnabled: Binding<Bool>
     ) -> [ServiceConfig] {
         var configs: [ServiceConfig] = [
+            ServiceConfig(name: "WeChat", iconName: "bubble.left.and.bubble.right.fill", color: .green,
+                          service: WeChatService.shared, binding: wechatEnabled),
             ServiceConfig(
                 name: "Calendar",
                 iconName: "calendar",
@@ -180,6 +184,7 @@ final class ServerController: ObservableObject {
     @AppStorage("locationEnabled") private var locationEnabled = false
     @AppStorage("mapsEnabled") private var mapsEnabled = true  // Default enabled
     @AppStorage("messagesEnabled") private var messagesEnabled = false
+    @AppStorage("wechatEnabled") private var wechatEnabled = false
     @AppStorage("phoneEnabled") private var phoneEnabled = false
     @AppStorage("remindersEnabled") private var remindersEnabled = false
     @AppStorage("shortcutsEnabled") private var shortcutsEnabled = false
@@ -202,6 +207,7 @@ final class ServerController: ObservableObject {
             locationEnabled: $locationEnabled,
             mapsEnabled: $mapsEnabled,
             messagesEnabled: $messagesEnabled,
+            wechatEnabled: $wechatEnabled,
             phoneEnabled: $phoneEnabled,
             remindersEnabled: $remindersEnabled,
             shortcutsEnabled: $shortcutsEnabled,
@@ -285,6 +291,7 @@ final class ServerController: ObservableObject {
         config.binding.wrappedValue = enabled
 
         Task {
+            if config.service is WeChatService, !enabled { await WeChatBackend.shared.stop() }
             if enabled, await !config.isActivated {
                 do {
                     try await config.service.activate()
@@ -382,6 +389,8 @@ final class ServerController: ObservableObject {
 
     func setEnabled(_ enabled: Bool) async {
         await networkManager.setEnabled(enabled)
+        if !enabled { await WeChatBackend.shared.stop(); await WeChatResources.shared.clear() }
+        else { await WeChatLifecycle.resumeIfEnabled() }
         updateServerStatus(enabled ? "Running" : "Disabled")
     }
 
@@ -511,7 +520,7 @@ actor MCPConnectionManager {
             name: Bundle.main.name ?? "iMCP",
             version: Bundle.main.shortVersionString ?? "unknown",
             capabilities: MCP.Server.Capabilities(
-                tools: .init(listChanged: true)
+                resources: .init(), tools: .init(listChanged: true)
             )
         )
     }
@@ -956,9 +965,31 @@ actor ServerNetworkManager {
             return ListPrompts.Result(prompts: [])
         }
 
-        await server.withMethodHandler(ListResources.self) { _ in
-            log.debug("Handling ListResources request for \(connectionID)")
-            return ListResources.Result(resources: [])
+        await server.withMethodHandler(ListResources.self) { [weak self] _ in
+            guard let self, await self.isEnabledState else { return ListResources.Result(resources: []) }
+            var result: [MCP.Resource] = []
+            for service in await self.services {
+                let id = String(describing: type(of: service))
+                if await self.serviceBindings[id]?.wrappedValue == true,
+                   let provider = service as? any ResourceService,
+                   !(await self.disabledTools.contains("wechat_get_media")) {
+                    result += await provider.resources()
+                }
+            }
+            return ListResources.Result(resources: result)
+        }
+        await server.withMethodHandler(ReadResource.self) { [weak self] params in
+            guard let self, await self.isEnabledState else { throw MCPError.invalidParams("Resource unavailable") }
+            for service in await self.services {
+                let id = String(describing: type(of: service))
+                if await self.serviceBindings[id]?.wrappedValue == true,
+                   let provider = service as? any ResourceService,
+                   !(await self.disabledTools.contains("wechat_get_media")),
+                   let content = try await provider.readResource(params.uri) {
+                    return ReadResource.Result(contents: [content])
+                }
+            }
+            throw MCPError.invalidParams("Resource unavailable")
         }
 
         await server.withMethodHandler(ListTools.self) { [weak self] _ in
@@ -1057,6 +1088,11 @@ actor ServerNetworkManager {
 
                         log.notice("Tool \(params.name) executed successfully for \(connectionID)")
                         switch value {
+                        case .object(let object) where object["resource_uri"]?.stringValue?.hasPrefix("wechat://media/") == true:
+                            return CallTool.Result(content: [.resourceLink(
+                                uri: object["resource_uri"]!.stringValue!, name: "WeChat media",
+                                mimeType: object["mime_type"]?.stringValue
+                            )], isError: false)
                         case .data(let mimeType?, let data) where mimeType.hasPrefix("audio/"):
                             return CallTool.Result(
                                 content: [

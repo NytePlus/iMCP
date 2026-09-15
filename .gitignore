@@ -36,3 +36,8 @@ playground.xcworkspace
 
 # Release artifacts
 dist/
+.ffmpeg/
+Backends/WeChat/target/
+dist/
+.derivedData/
+.sourcePackages/

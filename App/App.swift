@@ -4,16 +4,16 @@ import SwiftUI
 
 @main
 struct App: SwiftUI.App {
+    init() {
+        WeChatLifecycle.shared.start()
+    }
     @StateObject private var serverController = ServerController()
     @AppStorage("isEnabled") private var isEnabled = true
     @State private var isMenuPresented = false
 
-    // `startingUpdater: true` makes this the sole owner of update checking for
-    // the app's lifetime. Without it (or without ever constructing an updater
-    // at all), the SUFeedURL / SUPublicEDKey keys in Info.plist are inert and
-    // installs never learn about newer releases, no matter how long they run.
+    // Personal WeChat builds must never install the upstream update feed.
     private let updaterController = SPUStandardUpdaterController(
-        startingUpdater: true,
+        startingUpdater: false,
         updaterDelegate: nil,
         userDriverDelegate: nil
     )

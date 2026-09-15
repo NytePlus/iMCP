@@ -8,6 +8,7 @@ struct SettingsView: View {
     enum SettingsSection: String, CaseIterable, Identifiable {
         case general = "General"
         case services = "Services"
+        case wechat = "WeChat"
 
         var id: String { self.rawValue }
 
@@ -15,6 +16,7 @@ struct SettingsView: View {
             switch self {
             case .general: return "gear"
             case .services: return "square.grid.2x2"
+            case .wechat: return "bubble.left.and.bubble.right"
             }
         }
     }
@@ -46,6 +48,8 @@ struct SettingsView: View {
                 case .services:
                     ServicesSettingsView(serverController: serverController)
                         .navigationTitle("Services")
+                case .wechat:
+                    WeChatSettingsView().navigationTitle("WeChat")
                 }
             } else {
                 Text("Select a category")

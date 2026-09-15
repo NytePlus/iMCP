@@ -1,0 +1,17 @@
+diff --git a/Sources/MCP/Client/Client.swift b/Sources/MCP/Client/Client.swift
+--- a/Sources/MCP/Client/Client.swift
++++ b/Sources/MCP/Client/Client.swift
+@@ -126,5 +126,5 @@ public actor Client {
+         public var elicitation: Elicitation?
+         /// Experimental features supported by the client
+-        public var experimental: [String: String]?
++        public var experimental: [String: Value]?
+         /// Whether the client supports roots
+         public var roots: Capabilities.Roots?
+@@ -133,5 +133,5 @@ public actor Client {
+             sampling: Sampling? = nil,
+             elicitation: Elicitation? = nil,
+-            experimental: [String: String]? = nil,
++            experimental: [String: Value]? = nil,
+             roots: Capabilities.Roots? = nil
+         ) {

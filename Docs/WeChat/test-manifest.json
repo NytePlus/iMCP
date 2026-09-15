@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "system_test_status": "not_run",
+  "matrix": "TESTS.md",
+  "protocol_probe": {
+    "path": "../../Scripts/probe-wechat.py",
+    "role": "fact-check after user approval; no automated UI replacement",
+    "positive_conditions": ["C-INDEX", "C-FILTER", "C-CURSOR"],
+    "unresolved": ["C-LIVE", "C-MEDIA full lifecycle", "voice sample", "current nickname provenance"],
+    "member_pagination": {"unique_members":309,"pages":4,"duplicate_ids":0},
+    "source_plan": ["SCAN SessionTable", "USE TEMP B-TREE FOR ORDER BY"],
+    "media_failure": null,
+    "media_positive_sample": {"mime":"image/png","bytes":142588,"signature_check":"passed","resources_read":"passed"},
+    "media_remaining": ["animated GIF", "expiry", "revocation", "oversized input"],
+    "outputs": "Counts and predefined error categories only; no chat bodies or keys"
+  },
+  "tests": [
+    {"id":"ST-01","title":"Local approval and revoke","goal":"Authorized chats only","routes":["Settings/WeChat","wechat_request_access"],"conditions":["C-ACCESS"],"api_support":"fact-check","recordings":[],"related_tests":["combined_filters_and_revocation"]},
+    {"id":"ST-02","title":"Key reuse","goal":"SIP need not change for ordinary launches","routes":["Settings/WeChat"],"conditions":["C-KEY"],"api_support":"fact-check","recordings":[],"related_tests":[]},
+    {"id":"ST-03","title":"Combined filters","goal":"Correct message selection","routes":["wechat_search_messages"],"conditions":["C-FILTER"],"api_support":"setup","recordings":[],"related_tests":["combined_filters_and_revocation"]},
+    {"id":"ST-04","title":"Cursor isolation","goal":"Stable authorized pagination","routes":["wechat_get_messages","wechat_get_updates"],"conditions":["C-CURSOR"],"api_support":"external-event","recordings":[],"related_tests":["stable_pages_and_scope_bound_cursor","updates_retry_does_not_consume","cursor_rejects_other_account_and_revoked_generation"]},
+    {"id":"ST-05","title":"Initial indexing","goal":"No incomplete keyword answers","routes":["Settings/WeChat","wechat_search_messages"],"conditions":["C-INDEX"],"api_support":"fact-check","recordings":[],"related_tests":[]},
+    {"id":"ST-06","title":"Live recovery","goal":"No missing messages","routes":["wechat_get_updates"],"conditions":["C-LIVE"],"api_support":"external-event","recordings":[],"related_tests":[],"known_gap":"IMPLEMENTATION.md#blocking-gaps-not-acceptance-passes"},
+    {"id":"ST-07","title":"Complexity","goal":"No A or M steady scan","routes":["wechat_status"],"conditions":["C-SCALE"],"api_support":"setup","recordings":[],"related_tests":["rejects_scan_accepts_range"],"known_gap":"IMPLEMENTATION.md#blocking-gaps-not-acceptance-passes"},
+    {"id":"ST-08","title":"Media lifetime","goal":"Safe usable media","routes":["wechat_get_media","resources/read"],"conditions":["C-MEDIA"],"api_support":"setup","recordings":[],"related_tests":[]},
+    {"id":"ST-09","title":"Retention","goal":"Explicit archive ownership","routes":["Settings/WeChat"],"conditions":["C-RETENTION"],"api_support":"fact-check","recordings":[],"related_tests":[]},
+    {"id":"ST-10","title":"Native deployment","goal":"Working sandboxed application","routes":["App/launch","Settings/WeChat"],"conditions":["C-PACKAGE"],"api_support":"fact-check","recordings":[],"related_tests":[]}
+  ],
+  "mock_boundaries": "Synthetic SQLite messages only; no mocked result is evidence of live WeChat compatibility."
+}

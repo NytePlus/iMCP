@@ -112,10 +112,8 @@ struct ContentView: View {
                     openSettings()
                 }
 
-                MenuButton("Check for Updates...", isMenuPresented: $isMenuPresented) {
-                    updater.checkForUpdates()
-                }
-                .disabled(!updater.canCheckForUpdates)
+                Text("WeChat 自用构建 · 自动更新已关闭")
+                    .font(.caption).foregroundStyle(.secondary)
 
                 MenuButton("About iMCP", isMenuPresented: $isMenuPresented) {
                     aboutWindowController.showWindow(nil)

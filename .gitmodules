@@ -1,0 +1,4 @@
+[submodule "Backends/WeChat"]
+	path = Backends/WeChat
+	url = https://github.com/NytePlus/wx-cli.git
+	branch = codex/imcp-wechat
