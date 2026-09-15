@@ -6,12 +6,18 @@ struct WeChatSettingsView: View {
     @State private var key = ""
     @State private var query = ""
     @State private var status = "请选择账号目录并导入密钥。"
+    @State private var statusRows: [StatusRow] = []
     @State private var conversations: [Value] = []
     @State private var quotaGB = 5
     @State private var busy = false
     @State private var bootstrapCommand = ""
     @State private var bootstrapPending = false
     @State private var deleteID: String?
+    private struct StatusRow: Identifiable {
+        let id: String
+        let title: String
+        let value: String
+    }
     var body: some View {
         Form {
             Section("账号和密钥") {
@@ -31,17 +37,23 @@ struct WeChatSettingsView: View {
                         let pending = try WeChatBootstrap.prepare(account: account)
                         bootstrapCommand = pending.command; bootstrapPending = true
                         Task { defer { bootstrapPending = false; bootstrapCommand = "" }
-                            do { try await pending.completion.value; status = "密钥已保存到 Keychain；请恢复 SIP，然后连接。" }
-                            catch { status = error.localizedDescription }
+                            do { try await pending.completion.value; statusRows = []; status = "密钥已保存到 Keychain；请恢复 SIP，然后连接。" }
+                            catch { statusRows = []; status = error.localizedDescription }
                         }
-                    } catch { status = error.localizedDescription }
+                    } catch { statusRows = []; status = error.localizedDescription }
                 }.disabled(bootstrapPending)
                 if !bootstrapCommand.isEmpty { Text(bootstrapCommand).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
                 Text("首次提取：在 macOS 恢复环境临时关闭 SIP，回到系统后在 Terminal 执行命令。命令会重启微信并等待你登录；完成后恢复 SIP。密钥有效期间无需再次关闭。")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("状态") {
-                Text(status).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                if statusRows.isEmpty {
+                    Text(status).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                } else {
+                    ForEach(statusRows) { row in
+                        LabeledContent(row.title, value: row.value).textSelection(.enabled)
+                    }
+                }
                 Button("刷新状态") { perform { try await refresh() } }
                 Stepper("磁盘告警阈值：\(quotaGB) GB", value: $quotaGB, in: 1...100)
                 Button("保存阈值") { perform { _ = try await WeChatBackend.shared.request("local_quota", ["bytes": .int(quotaGB * 1024 * 1024 * 1024)]); try await refresh() } }
@@ -90,7 +102,7 @@ struct WeChatSettingsView: View {
         panel.allowsMultipleSelection = false; panel.message = "选择包含 db_storage 的微信账号目录"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard FileManager.default.fileExists(atPath: url.appendingPathComponent("db_storage/session/session.db").path) else {
-            status = "目录中没有 db_storage/session/session.db。"; return
+            statusRows = []; status = "目录中没有 db_storage/session/session.db。"; return
         }
         do {
             let bookmark = try url.bookmarkData(options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess], includingResourceValuesForKeys: nil, relativeTo: nil)
@@ -98,24 +110,76 @@ struct WeChatSettingsView: View {
             UserDefaults.standard.set(url.lastPathComponent, forKey: "wechatDirectoryName")
             directory = url.lastPathComponent
             Task { await WeChatBackend.shared.stop(); await WeChatResources.shared.clear() }
-        } catch { status = error.localizedDescription }
+        } catch { statusRows = []; status = error.localizedDescription }
     }
     @MainActor private func refresh() async throws {
         let result = try await WeChatBackend.shared.request("status")
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        status = String(decoding: try encoder.encode(result), as: UTF8.self)
+        statusRows = makeStatusRows(result.objectValue ?? [:])
+        status = statusRows.isEmpty ? "后端未返回状态信息。" : "状态已刷新。"
         let list = try await WeChatBackend.shared.request("local_list")
         conversations = list.objectValue?["items"]?.arrayValue ?? []
     }
+    private func makeStatusRows(_ values: [String: Value]) -> [StatusRow] {
+        let fields: [(String, String)] = [
+            ("source_available", "源数据库可用"),
+            ("live_sync_ready", "实时同步就绪"),
+            ("image_key_configured", "图片密钥已配置"),
+            ("image_config_unavailable", "图片配置不可用"),
+            ("compatibility", "兼容性"),
+            ("session_index_diagnostics", "会话索引诊断"),
+            ("index_bytes", "归档索引大小"),
+            ("quota_bytes", "磁盘告警阈值"),
+            ("quota_warning", "磁盘告警"),
+            ("archive_semantics", "归档语义"),
+        ]
+        return fields.compactMap { key, title in
+            guard let value = values[key] else { return nil }
+            return StatusRow(id: key, title: title, value: formatStatusValue(value, key: key))
+        }
+    }
+    private func formatStatusValue(_ value: Value, key: String? = nil) -> String {
+        switch value {
+        case .null: return "无"
+        case .bool(let value): return value ? "是" : "否"
+        case .int(let value):
+            if key == "index_bytes" || key == "quota_bytes" {
+                return ByteCountFormatter.string(fromByteCount: Int64(value), countStyle: .file)
+            }
+            return value.formatted()
+        case .double(let value): return value.formatted()
+        case .string(let value):
+            if key == "archive_semantics", value == "first_observed" { return "保留首次观测内容" }
+            return value.isEmpty ? "无" : value
+        case .array(let values):
+            return values.isEmpty ? "无" : values.map { formatStatusValue($0) }.joined(separator: "、")
+        case .object(let values):
+            if values.isEmpty { return "无" }
+            return values.sorted { $0.key < $1.key }
+                .map { "\(diagnosticTitle($0.key))：\(formatStatusValue($0.value))" }
+                .joined(separator: "；")
+        case .data: return "二进制数据"
+        }
+    }
+    private func diagnosticTitle(_ key: String) -> String {
+        switch key {
+        case "available_indexes": return "可用索引"
+        case "existing_index": return "现有索引"
+        case "query_plan": return "查询计划"
+        case "reason": return "原因"
+        case "required_index": return "所需索引"
+        case "state": return "状态"
+        default: return key
+        }
+    }
     @MainActor private func chooseImageConfig() {
         let account = UserDefaults.standard.string(forKey: "wechatDirectoryName") ?? ""
-        guard !account.isEmpty else { status = "请先选择微信账号目录。"; return }
+        guard !account.isEmpty else { statusRows = []; status = "请先选择微信账号目录。"; return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false; panel.canChooseFiles = true; panel.allowsMultipleSelection = false
         panel.showsHiddenFiles = true
         panel.message = "为当前账号选择 config.ini，只读授权；不会修改文件。"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        guard url.lastPathComponent == "config.ini" else { status = "请选择 config.ini 文件。"; return }
+        guard url.lastPathComponent == "config.ini" else { statusRows = []; status = "请选择 config.ini 文件。"; return }
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         do {
@@ -126,10 +190,12 @@ struct WeChatSettingsView: View {
                 await WeChatBackend.shared.stop(); await WeChatResources.shared.clear()
                 try await refresh()
             }
-        } catch { status = "配置无法读取或格式不正确，请确认选择的是当前账号的 config.ini。" }
+        } catch { statusRows = []; status = "配置无法读取或格式不正确，请确认选择的是当前账号的 config.ini。" }
     }
     @MainActor private func perform(_ operation: @escaping @MainActor () async throws -> Void) {
         busy = true
-        Task { defer { busy = false }; do { try await operation() } catch { status = error.localizedDescription } }
+        Task { defer { busy = false }; do { try await operation() } catch {
+            statusRows = []; status = error.localizedDescription
+        } }
     }
 }

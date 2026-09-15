@@ -35,6 +35,13 @@ The upstream installation instructions below install upstream iMCP, not this for
 <table>
   <tr>
     <th>
+      <img src="Assets/wechat.svg" width="48" height="48" alt="" role="presentation"/>
+    </th>
+    <td><strong>WeChat</strong></td>
+    <td>Access authorized historical messages and media with conversation-level approval. Real-time synchronization is not yet enabled.</td>
+  </tr>
+  <tr>
+    <th>
       <img src="Assets/calendar.svg" width="48" height="48" alt="" role="presentation"/>
     </th>
     <td><strong>Calendar</strong></td>
