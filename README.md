@@ -1,431 +1,232 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Assets/hero-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="Assets/hero-light.svg">
-  <img alt="iMCP">
+  <img src="Assets/hero-light.svg" alt="iMCP — Your apps. One conversation. Connect WeChat and macOS to your AI." width="1200">
 </picture>
 
-iMCP is a macOS app for connecting your digital life with AI.
-It works with [Claude Desktop][claude-app]
-and a [growing list of clients][mcp-clients] that support the
-[Model Context Protocol (MCP)][mcp].
+# iMCP
 
-## WeChat development fork
+A macOS menu-bar app that connects your everyday apps to AI clients through the
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io).
+Choose the services and tools you want to share, and approve client connections on your Mac.
 
-This repository is a fork of [mattt/iMCP](https://github.com/mattt/iMCP).
-The custom implementation lives on `codex/wechat-integration`. The Rust backend
-at `Backends/WeChat` is a Git submodule of
-[NytePlus/wx-cli](https://github.com/NytePlus/wx-cli), itself a fork of
-`pandorafuture/wx-cli`. Both upstream MIT licenses are retained.
+This is the **WeChat development fork** of [mattt/iMCP](https://github.com/mattt/iMCP).
+It adds authorized historical WeChat message queries and media access to the macOS services.
+
+> [!IMPORTANT]
+> **WeChat real-time synchronization is not enabled.** Historical queries use the
+> local archive and must not be treated as a live view of your messages.
+> See the [implementation status](Docs/WeChat/IMPLEMENTATION.md) for verified
+> capabilities and remaining limitations.
+
+## Capabilities
+
+| Service | What you can do |
+| --- | --- |
+| **WeChat** | Find authorized conversations, search historical messages, filter by time/member/type, retrieve context and available media. |
+| Calendar | List calendars, fetch events, and create or delete events. |
+| Contacts | Search, list, create, and update contacts. |
+| Messages | Read iMessage history after granting access to its database. |
+| Capture | Capture screen content with the required macOS permission. |
+| Location & Maps | Get your location, search places, explore nearby points of interest, plan routes, and generate maps. |
+| Reminders | Work with reminder lists and reminders. |
+| Phone & Shortcuts | Use the available phone and Shortcuts tools. |
+| Weather | Available only in builds configured with the required WeatherKit capability; disabled by the local WeChat build script. |
+
+Services may require macOS permissions or additional setup.
+The exact tool inventory depends on the build and your enabled services/tools.
+
+## WeChat
+
+<img src="Assets/wechat.svg" width="48" height="48" alt="WeChat conversation illustration">
+
+Bring selected conversations into your AI workflow without granting access to every chat.
+For example, after authorizing a group you can ask:
+
+- “Summarize last week's discussions in this group.”
+- “Find the files and links shared by this member in August.”
+- “Show the messages around this search result.”
+
+These are example requests, not captured client responses. Results depend on the
+authorized archive and the tools supported by your client.
+
+![WeChat workflow: choose a local account, approve individual conversations, then query the historical archive. Live synchronization is not enabled.](Assets/wechat-workflow.svg)
+
+### Set up an account
+
+1. Build this fork using the instructions below, open the app, and choose
+   **Settings → WeChat** from its menu-bar menu.
+2. Click **选择包含 db_storage 的微信账号目录** and select the current account's directory.
+3. Enter an existing 64-character hexadecimal database key and choose
+   **保存到 Keychain 并连接**. The key stays in the local Keychain; do not put it in a chat,
+   issue, command argument, or environment variable.
+4. Click **刷新状态**. Check source availability and archive/index status.
+   A readable source does not mean real-time synchronization is running.
+5. Under **持久授权**, enter a group or contact name and click **查找并授权**.
+   Confirm the specific conversation in the local approval dialog.
+6. Wait for historical indexing to finish, then enable **WeChat** in the service list
+   and connect your MCP client.
+
+If you do not have a key, the existing Settings page can generate a one-time
+Terminal extraction command. That workflow requires user-managed SIP changes and
+restarts WeChat. Read its instructions, restore SIP after extraction, and keep
+keys out of shared logs. This development build does not manage SIP for you.
+
+### Optional image access
+
+For images that need the account-specific image key, use
+**选择图片配置 config.ini（只读）** in Settings → WeChat.
+Select the current account's file under
+`app_data/radium/ilink/…/kvcomm/config.ini`.
+
+Only the chosen file receives read-only authorization. You can revoke it in the
+same section. Image configuration is optional for text queries.
+Media availability depends on the message and format; unsupported or unavailable
+media returns an explicit error. A configured image key is not a guarantee that
+every image can be decoded.
+
+### WeChat tools
+
+| Tool | Purpose |
+| --- | --- |
+| `wechat_status` | Check source compatibility, archive storage, and readiness. |
+| `wechat_find_conversations` | Find already-authorized conversations. |
+| `wechat_request_access` | Ask the local user to approve a conversation. |
+| `wechat_list_members` | Page through member IDs and observed names. |
+| `wechat_get_messages` | Read archived messages with combined filters. |
+| `wechat_search_messages` | Search the indexed archive by keyword and filters. |
+| `wechat_get_message_context` | Retrieve messages around an authorized message. |
+| `wechat_get_updates` | Page through archive additions; check live-sync readiness first. |
+| `wechat_get_media` | Retrieve an available temporary media resource. |
+
+Time, member, type, and keyword filters can be combined. Follow returned cursors
+without changing the query. Text search does not include OCR or speech transcription.
+Observed member names are not a verified history of current nicknames.
+
+### Access and retention
+
+- The WeChat source database is opened read-only.
+- Approved conversations create a **persistent local historical archive**.
+  The archive preserves first-observed content, including content later recalled or
+  removed from the source.
+- Revoking a conversation blocks client access while retaining its local archive.
+  **彻底清除** deletes its local archive after confirmation; it does not modify WeChat.
+- Media resources are temporary and recheck authorization.
+- AI clients may send tool results to their model provider. Review the client you
+  connect and authorize only the conversations you want it to access.
+
+## Build this fork
+
+The current development branch is `codex/wechat-integration`.
+The backend at `Backends/WeChat` is a pinned Git submodule of
+[NytePlus/wx-cli](https://github.com/NytePlus/wx-cli), forked from
+[pandorafuture/wx-cli](https://github.com/pandorafuture/wx-cli).
+
+Use an Apple Silicon Mac with macOS 15.3 or later, Xcode, the Rust toolchain, and a
+valid Apple Development signing identity. Native macOS is required for app
+signing, sandbox, Keychain, and permission validation.
 
 ```sh
 git clone --recurse-submodules --branch codex/wechat-integration https://github.com/NytePlus/iMCP.git
 cd iMCP
+
 # For an existing checkout:
 git submodule update --init --recursive
+
+# Choose your installed Apple Development identity:
+security find-identity -v -p codesigning
+SIGNING_IDENTITY='Apple Development: Your Name (TEAMID)' bash Scripts/build-wechat.sh
 ```
 
-The WeChat module supports authorized historical-message queries and media.
-**Real-time synchronization is not yet enabled.** See the
-[implementation status](Docs/WeChat/IMPLEMENTATION.md) and
-[fork/submodule workflow](Docs/WeChat/REPOSITORIES.md) before building.
-The upstream installation instructions below install upstream iMCP, not this fork.
+The script builds the Swift app, Rust backend, and restricted FFmpeg helpers,
+applies the pinned MCP SDK compatibility patch, and signs the bundle.
+Outputs are `dist/iMCP.app` and `dist/iMCP-WeChat.zip`.
+They are locally signed, **not notarized**, and are not installed automatically.
+Quit another iMCP instance before opening the staged app.
 
-## Capabilities
+The upstream website download and Homebrew cask install upstream iMCP;
+they do **not** install this fork's WeChat integration.
+Automatic upstream updates are disabled in this build.
 
-<table>
-  <tr>
-    <th>
-      <img src="Assets/calendar.svg" width="48" height="48" alt="" role="presentation"/>
-    </th>
-    <td><strong>Calendar</strong></td>
-    <td>View and manage calendar events, including creating new events with customizable settings like recurrence, alarms, and availability status.</td>
-  </tr>
-  <tr>
-    <th>
-      <img src="Assets/contacts.svg" width="48" height="48" alt="" role="presentation"/>
-    </th>
-    <td><strong>Contacts</strong></td>
-    <td>Access contact information about yourself and search your contacts by name, phone number, or email address.</td>
-  </tr>
-  <tr>
-    <th>
-      <img src="Assets/location.svg" width="48" height="48" alt="" role="presentation"/>
-    </th>
-    <td><strong>Location</strong></td>
-    <td>Access current location data and convert between addresses and geographic coordinates.</td>
-  </tr>
-  <tr>
-    <th>
-      <img src="Assets/maps.svg" width="48" height="48" alt="" role="presentation"/>
-    </th>
-    <td><strong>Maps</strong></td>
-    <td>Provides location services including place search, directions, points of interest lookup, travel time estimation, and static map image generation.</td>
-  </tr>
-  <tr>
-    <th>
-      <img src="Assets/messages.svg" width="48" height="48" alt="" role="presentation"/>
-    </th>
-    <td><strong>Messages</strong></td>
-    <td>Access message history with specific participants within customizable date ranges.</td>
-  </tr>
-  <tr>
-    <th>
-      <img src="Assets/reminders.svg" width="48" height="48" alt="" role="presentation"/>
-    </th>
-    <td><strong>Reminders</strong></td>
-    <td>View and create reminders with customizable due dates, priorities, and alerts across different reminder lists.</td>
-  </tr>
-  <tr>
-    <th>
-      <img src="Assets/weather.svg" width="48" height="48" alt="" role="presentation"/>
-    </th>
-    <td><strong>Weather</strong></td>
-    <td>Access current weather conditions including temperature, wind speed, and weather conditions for any location.</td>
-  </tr>
-</table>
+See [build and implementation notes](Docs/WeChat/IMPLEMENTATION.md) and
+[repository/submodule workflow](Docs/WeChat/REPOSITORIES.md).
 
-## Getting Started
+## Connect an MCP client
 
-### Download and open the app
+1. Open this fork's app and enable the MCP server from the menu bar.
+   Its filled apple icon indicates that the server is enabled; the outline indicates disabled.
+2. Enable the desired services. macOS may ask you to grant access.
+3. Choose **Copy server command to clipboard** to get this app bundle's actual
+   `imcp-server` path.
+4. Add that executable as a **stdio** MCP server in your client.
+5. Approve the incoming connection in iMCP.
 
-First, [download the iMCP app](https://iMCP.app/download)
-(requires macOS 15.3 or later).
-
-Or, if you have [Homebrew](https://brew.sh) installed,
-you can run the following command:
-
-```console
-brew install --cask mattt/tap/iMCP
-```
-
-<img align="right" width="344" src="/Assets/imcp-screenshot-first-launch.png" alt="Screenshot of iMCP on first launch" />
-
-When you open the app,
-you'll see a
-<img style="display: inline" width="20" height="16" src="/Assets/icon.svg" />
-icon in your menu bar.
-
-Clicking on this icon reveals the iMCP menu,
-which displays all available services.
-Initially, all services will appear in gray,
-indicating they're inactive.
-
-The blue toggle switch at the top indicates that the MCP server is running
-and ready to connect with MCP-compatible clients.
-
-<br clear="all">
-
-<img align="right" width="372" src="/Assets/imcp-screenshot-grant-permission.png" alt="Screenshot of macOS permission dialog" />
-
-### Activate services
-
-To activate a service, click on its icon.
-The system will prompt you with a permission dialog.
-For example, when activating Calendar access, you'll see a dialog asking `"iMCP" Would Like Full Access to Your Calendar`.
-Click <kbd>Allow Full Access</kbd> to continue.
-
-> [!IMPORTANT]
-> iMCP **does not** collect or store any of your data.
-> Clients like Claude Desktop _do_ send
-> your data off device as part of tool calls.
-
-<br clear="all">
-
-<img align="right" width="344" src="/Assets/imcp-screenshot-all-services-active.png" alt="Screenshot of iMCP with all services enabled" />
-
-Once activated,
-each service icons goes from gray to their distinctive colors —
-red for Calendar, green for Messages, blue for Location, and so on.
-
-Repeat this process for all of the capabilities you'd like to enable.
-These permissions follow Apple's standard security model,
-giving you complete control over what information iMCP can access.
-
-<!-- <br clear="all"> -->
-
-<!-- <img align="right" width="344" src="/Assets/imcp-screenshot-configure-claude-desktop.png" /> -->
-
-<br clear="all">
-
-### Connect to Claude Desktop
-
-If you don't have Claude Desktop installed,
-you can [download it here](https://claude.ai/download).
-
-Open Claude Desktop and go to "Settings... (<kbd>⌘</kbd><kbd>,</kbd>)".
-Click on "Developer" in the sidebar of the Settings pane,
-and then click on "Edit Config".
-This will create a configuration file at
-`~/Library/Application Support/Claude/claude_desktop_config.json`.
-
-<br/>
-
-To connect iMCP to Claude Desktop,
-click <img style="display: inline" width="20" height="16" src="/Assets/icon.svg" />
-\> "Configure Claude Desktop".
-
-This will add or update the MCP server configuration to use the
-`imcp-server` executable bundled in the application.
-Other MCP server configurations in the file will be preserved.
-
-<details>
-<summary>You can also configure Claude Desktop manually</summary>
-
-Click <img style="display: inline" width="20" height="16" src="/Assets/icon.svg" />
-\> "Copy server command to clipboard".
-Then open `claude_desktop_config.json` in your editor
-and enter the following:
+For clients using a JSON MCP configuration, the entry has this shape.
+Replace the example path with the command copied from your app:
 
 ```json
 {
   "mcpServers": {
     "iMCP": {
-      "command": "{paste iMCP server command}"
+      "command": "/absolute/path/to/iMCP.app/Contents/MacOS/imcp-server"
     }
   }
 }
 ```
 
-</details>
+For Claude Desktop, **Configure Claude Desktop** in iMCP's menu offers a local
+confirmation dialog and preserves existing server entries.
+Other clients can use the same bundled executable; the configuration location
+depends on the client.
 
-<img align="right" width="372" src="/Assets/imcp-screenshot-approve-connection.png" />
+Use **Settings → Services** to enable or disable individual tools.
+Use **Settings → General** to manage trusted clients and launch at login.
+Trusted client names are self-reported, not verified identities.
 
-### Call iMCP tools from Claude Desktop
+## Architecture and development
 
-Quit and reopen the Claude Desktop app.
-You'll be prompted to approve the connection.
+The SwiftUI app manages permissions and services. The bundled CLI bridges stdio
+MCP requests to the app through local Bonjour discovery.
+The WeChat service talks to its Rust child over private stdin/stdout frames.
+The backend manages the authorized local archive and on-demand media access.
 
-<br clear="all">
+- [App](App/) — macOS UI, service permissions, and MCP tools.
+- [CLI](CLI/) — stdio bridge and discovery.
+- [WeChat backend](Backends/WeChat/) — archive, queries, authorization, and media.
+- [WeChat test plan](Docs/WeChat/TESTS.md) — acceptance criteria and known gaps.
+- [MCP connection notes](Docs/WeChat/CODEX-CONNECTION.md) — pinned SDK compatibility fix.
 
-After approving the connection,
-you should now see 🔨12 in the bottom right corner of your chat box.
-Click on that to see a list of all the tools made available to Claude
-by iMCP.
+To run the backend regression suite:
 
-<p align="center">
-  <img width="694" src="/Assets/claude-desktop-screenshot-tools-enabled.png" alt="Screenshot of Claude Desktop with tools enabled" />
-</p>
-
-Now you can ask Claude questions that require access to your personal data,
-such as:
-
-> "How's the weather where I am?"
-
-Claude will use the appropriate tools to retrieve this information,
-providing you with accurate, personalized responses
-without requiring you to manually share this data during your conversation.
-
-<p align="center">
-  <img width="738" src="/Assets/claude-desktop-screenshot-message.png" alt="Screenshot of Claude response to user message 'How's the weather where I am?'" />
-</p>
-
-### Connect to [Claude Code][claude-code]
-
-To add iMCP globally after installing the app:
-
-```console
-claude mcp add --scope user iMCP -- /Applications/iMCP.app/Contents/MacOS/imcp-server
+```sh
+cargo test --manifest-path Backends/WeChat/Cargo.toml --locked -p imcp-wechat -p wx-db
 ```
 
-<details>
-<summary>Or import from Claude Desktop</summary>
+### Artwork
 
-If you've already configured Claude Desktop, you can import its MCP servers:
+The apple mark is original vector artwork shared by the application icon,
+menu-bar icons, and README headers. The WeChat workflow is an explanatory diagram,
+not an application screenshot.
 
-```console
-claude mcp add-from-claude-desktop
+Regenerate the icon sizes and README artwork on macOS:
+
+```sh
+swift Scripts/generate-brand-assets.swift
 ```
 
-</details>
+## Acknowledgments and license
 
-### Connect to [Cursor][cursor]
+This fork builds on [mattt/iMCP](https://github.com/mattt/iMCP),
+[wx-cli](https://github.com/pandorafuture/wx-cli), the
+[Swift MCP SDK](https://github.com/modelcontextprotocol/swift-sdk),
+[Madrid](https://github.com/mattt/Madrid), and
+[Ontology](https://github.com/mattt/Ontology).
+Thanks to the upstream authors and contributors, including Christopher Sardegna
+for the iMessage typedstream work.
 
-Open this deep link to automatically install the iMCP server:
+iMCP and the wx-cli backend retain their MIT licenses.
+See [LICENSE.md](LICENSE.md) and [the backend license](Backends/WeChat/LICENSE).
+The packaged FFmpeg helpers include their LGPL notices, source archive, and rebuild script.
 
-<a href="https://cursor.com/en-US/install-mcp?name=iMCP&config=eyJjb21tYW5kIjoiL0FwcGxpY2F0aW9ucy9pTUNQLmFwcC9Db250ZW50cy9NYWNPUy9pbWNwLXNlcnZlciAifQ%3D%3D">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/deeplink/mcp-install-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://cursor.com/deeplink/mcp-install-light.svg">
-    <img alt="Install MCP Server" src="https://cursor.com/deeplink/mcp-install-light.svg">
-  </picture>
-</a>
-
-### Connect to [Amp][amp]
-
-To add iMCP globally (available in all projects):
-
-```console
-amp mcp add iMCP -- /Applications/iMCP.app/Contents/MacOS/imcp-server
-```
-
-> [!NOTE]
-> When a client first connects, iMCP will show an approval dialog.
-> Click "Allow" and check "Always trust this client" to avoid repeated prompts.
-
-## Technical Details
-
-### App & CLI
-
-iMCP is a macOS app that bundles a command-line executable, `imcp-server`.
-
-- [`iMCP.app`](/App/) provides UI for configuring services and — most importantly —
-  a means of interacting with macOS system permissions,
-  so that it can access Contacts, Calendar, and other information.
-- [`imcp-server`](/CLI/) provides an MCP server that
-  uses standard input/output for communication
-  ([stdio transport][mcp-transports]).
-
-The app and CLI communicate with each other on the local network
-using [Bonjour][bonjour] for automatic discovery.
-Both advertise a service with type "\_mcp.\_tcp" and domain "local".
-Requests from MCP clients are read by the CLI from `stdin`
-and relayed to the app;
-responses from the app are received by the CLI and written to `stdout`.
-See [`StdioProxy`](https://github.com/mattt/iMCP/blob/8cf9d250286288b06bf5d3dda78f5905ad0d7729/CLI/main.swift#L47)
-for implementation details.
-
-For this project, we created what became
-[the official Swift SDK][swift-sdk]
-for Model Context Protocol servers and clients.
-The app uses this package to handle proxied requests from MCP clients.
-
-### iMessage Database Access
-
-Apple doesn't provide public APIs for accessing your messages.
-However, the Messages app on macOS stores data in a SQLite database located at
-`~/Library/Messages/chat.db`.
-
-iMCP runs in [App Sandbox][app-sandbox],
-which limits its access to user data and system resources.
-When you go to enable the Messages service,
-you'll be prompted to open the `chat.db` file through the standard file picker.
-When you do, macOS adds that file to the app's sandbox.
-[`NSOpenPanel`][nsopenpanel] is magic like that.
-
-But opening the iMessage database is just half the battle.
-Over the past few years,
-Apple has moved away from storing messages in plain text
-and instead toward a proprietary `typedstream` format.
-
-For this project, we created [Madrid][madrid]:
-a Swift package for reading your iMessage database.
-It includes a Swift implementation for decoding Apple's `typedstream` format,
-adapted from Christopher Sardegna's [imessage-exporter] project
-and [blog post about reverse-engineering `typedstream`][typedstream-blog-post].
-
-### JSON-LD for Tool Results
-
-The tools provided by iMCP return results as
-[JSON-LD][json-ld] documents.
-For example,
-the `fetchContacts` tool uses the [Contacts framework][contacts-framework],
-which represents people and organizations with the [`CNContact`][cncontact] type.
-Here's how an object of that type is encoded as JSON-LD:
-
-```json
-{
-  "@context": "https://schema.org",
-  "@type": "Person",
-  "name": "Mattt",
-  "url": "https://mat.tt"
-}
-```
-
-[Schema.org][schema.org] provides standard vocabularies for
-people, postal addresses, events, and many other objects we want to represent.
-And JSON-LD is a convenient encoding format for
-humans, AI, and conventional software alike.
-
-For this project, we created [Ontology][ontology]:
-a Swift package for working with structured data.
-It includes convenience initializers for types from Apple frameworks,
-such as those returned by iMCP tools.
-
-## Debugging
-
-### Using the MCP Inspector
-
-To debug interactions between iMCP and clients,
-you can use the [inspector tool](https://github.com/modelcontextprotocol/inspector)
-(requires Node.js):
-
-1. Click <img style="display: inline" width="20" height="16" src="/Assets/icon.svg" /> > "Copy server command to clipboard"
-2. Open a terminal and run the following commands:
-
-   ```console
-   # Download and run inspector package on imcp-server
-   npx @modelcontextprotocol/inspector [paste-copied-command]
-
-   # Open inspector web app running locally
-   open http://127.0.0.1:6274
-   ```
-
-Inspector lets you see all requests and responses between the client and the iMCP server,
-which is helpful for understanding how the protocol works.
-
-### Using Companion
-
-<img align="right" width="284" src="/Assets/companion-screenshot-add-server.png" />
-
-[Companion][companion] is a utility for testing and debugging your MCP servers
-(requires macOS 15 or later).
-It gives you an easy way to browse and interact with
-a server's prompts, resources, and tools.
-Here's how to connect it to iMCP:
-
-1. Click <img style="display: inline" width="20" height="16" src="/Assets/icon.svg" /> > "Copy server command to clipboard"
-2. [Download][companion-download] and open the Companion app
-3. Click the <kbd>+</kbd> button in the toolbar to add an MCP server
-4. Fill out the form:
-   - Enter "iMCP" as the name
-   - Select "STDIO" as the transport
-   - Paste the copied iMCP server command
-   - Click "Add Server"
-
-<br clear="all">
-
-## Acknowledgments
-
-- [Justin Spahr-Summers](https://jspahrsummers.com/)
-  ([@jspahrsummers](https://github.com/jspahrsummers)),
-  David Soria Parra
-  ([@dsp-ant](https://github.com/dsp-ant)), and
-  Ashwin Bhat
-  ([@ashwin-ant](https://github.com/ashwin-ant))
-  for their work on MCP.
-- [Christopher Sardegna](https://chrissardegna.com)
-  ([@ReagentX](https://github.com/ReagentX))
-  for reverse-engineering the `typedstream` format
-  used by the Messages app.
-
-## License
-
-This project is available under the MIT license.
-See the LICENSE file for more info.
-
-## Legal
-
-iMessage® is a registered trademark of Apple Inc.
-This project is not affiliated with, endorsed, or sponsored by Apple Inc.
-
-[amp]: https://ampcode.com
-[app-sandbox]: https://developer.apple.com/documentation/security/app-sandbox
-[bonjour]: https://developer.apple.com/bonjour/
-[claude-app]: https://claude.ai/download
-[claude-code]: https://claude.com/product/claude-code
-[companion]: https://github.com/mattt/Companion
-[companion-download]: https://github.com/mattt/Companion/releases/latest/download/Companion.zip
-[contacts-framework]: https://developer.apple.com/documentation/contacts
-[cncontact]: https://developer.apple.com/documentation/contacts/cncontact
-[cursor]: https://cursor.com
-[imessage-exporter]: https://github.com/ReagentX/imessage-exporter
-[json-ld]: https://json-ld.org
-[madrid]: https://github.com/mattt/Madrid
-[mcp]: https://modelcontextprotocol.io/introduction
-[mcp-clients]: https://modelcontextprotocol.io/clients
-[mcp-transports]: https://modelcontextprotocol.io/docs/concepts/architecture#transport-layer
-[nsopenpanel]: https://developer.apple.com/documentation/appkit/nsopenpanel
-[ontology]: https://github.com/mattt/Ontology
-[schema.org]: https://schema.org
-[swift-sdk]: https://github.com/modelcontextprotocol/swift-sdk
-[typedstream-blog-post]: https://chrissardegna.com/blog/reverse-engineering-apples-typedstream-format/
+iMessage and WeChat belong to their respective trademark owners.
+This project is not affiliated with or endorsed by Apple or Tencent.
