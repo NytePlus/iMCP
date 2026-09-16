@@ -83,8 +83,13 @@ enum ServiceRegistry {
         weatherEnabled: Binding<Bool>
     ) -> [ServiceConfig] {
         var configs: [ServiceConfig] = [
-            ServiceConfig(name: "WeChat", iconName: "bubble.left.and.bubble.right.fill", color: .green,
-                          service: WeChatService.shared, binding: wechatEnabled),
+            ServiceConfig(
+                name: "WeChat",
+                iconName: "bubble.left.and.bubble.right.fill",
+                color: .green,
+                service: WeChatService.shared,
+                binding: wechatEnabled
+            ),
             ServiceConfig(
                 name: "Calendar",
                 iconName: "calendar",
@@ -389,8 +394,11 @@ final class ServerController: ObservableObject {
 
     func setEnabled(_ enabled: Bool) async {
         await networkManager.setEnabled(enabled)
-        if !enabled { await WeChatBackend.shared.stop(); await WeChatResources.shared.clear() }
-        else { await WeChatLifecycle.resumeIfEnabled() }
+        if !enabled {
+            await WeChatBackend.shared.stop(); await WeChatResources.shared.clear()
+        } else {
+            await WeChatLifecycle.resumeIfEnabled()
+        }
         updateServerStatus(enabled ? "Running" : "Disabled")
     }
 
@@ -520,7 +528,8 @@ actor MCPConnectionManager {
             name: Bundle.main.name ?? "iMCP",
             version: Bundle.main.shortVersionString ?? "unknown",
             capabilities: MCP.Server.Capabilities(
-                resources: .init(), tools: .init(listChanged: true)
+                resources: .init(),
+                tools: .init(listChanged: true)
             )
         )
     }
@@ -971,8 +980,9 @@ actor ServerNetworkManager {
             for service in await self.services {
                 let id = String(describing: type(of: service))
                 if await self.serviceBindings[id]?.wrappedValue == true,
-                   let provider = service as? any ResourceService,
-                   !(await self.disabledTools.contains("wechat_get_media")) {
+                    let provider = service as? any ResourceService,
+                    !(await self.disabledTools.contains("wechat_get_media"))
+                {
                     result += await provider.resources()
                 }
             }
@@ -983,9 +993,10 @@ actor ServerNetworkManager {
             for service in await self.services {
                 let id = String(describing: type(of: service))
                 if await self.serviceBindings[id]?.wrappedValue == true,
-                   let provider = service as? any ResourceService,
-                   !(await self.disabledTools.contains("wechat_get_media")),
-                   let content = try await provider.readResource(params.uri) {
+                    let provider = service as? any ResourceService,
+                    !(await self.disabledTools.contains("wechat_get_media")),
+                    let content = try await provider.readResource(params.uri)
+                {
                     return ReadResource.Result(contents: [content])
                 }
             }
@@ -1088,11 +1099,18 @@ actor ServerNetworkManager {
 
                         log.notice("Tool \(params.name) executed successfully for \(connectionID)")
                         switch value {
-                        case .object(let object) where object["resource_uri"]?.stringValue?.hasPrefix("wechat://media/") == true:
-                            return CallTool.Result(content: [.resourceLink(
-                                uri: object["resource_uri"]!.stringValue!, name: "WeChat media",
-                                mimeType: object["mime_type"]?.stringValue
-                            )], isError: false)
+                        case .object(let object)
+                        where object["resource_uri"]?.stringValue?.hasPrefix("wechat://media/") == true:
+                            return CallTool.Result(
+                                content: [
+                                    .resourceLink(
+                                        uri: object["resource_uri"]!.stringValue!,
+                                        name: "WeChat media",
+                                        mimeType: object["mime_type"]?.stringValue
+                                    )
+                                ],
+                                isError: false
+                            )
                         case .data(let mimeType?, let data) where mimeType.hasPrefix("audio/"):
                             return CallTool.Result(
                                 content: [

@@ -2,9 +2,9 @@ name: CI
 
 on:
     push:
-        branches: ["main"]
+        branches: ["main", "codex/**"]
     pull_request:
-        branches: ["main"]
+        branches: ["main", "codex/wechat-integration"]
 
 permissions:
     contents: read
@@ -26,6 +26,19 @@ jobs:
         steps:
             - name: Checkout code
               uses: actions/checkout@v6
+              with:
+                  submodules: recursive
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: Check WeChat backend
+              run: |
+                  cargo fmt --manifest-path Backends/WeChat/Cargo.toml --all --check
+                  cargo clippy --manifest-path Backends/WeChat/Cargo.toml --locked -p imcp-wechat -p wx-db --all-targets -- -D warnings
+                  cargo test --manifest-path Backends/WeChat/Cargo.toml --locked -p imcp-wechat -p wx-db
 
             # Key the cache on the exact Xcode build,
             # so a runner image update can't restore module files
@@ -48,8 +61,19 @@ jobs:
             - name: Lint
               run: swift format lint --strict --recursive .
 
+            - name: Resolve Swift packages and apply MCP compatibility patch
+              run: |
+                  xcodebuild -resolvePackageDependencies -project iMCP.xcodeproj -scheme iMCP \
+                    -clonedSourcePackagesDirPath .sourcePackages \
+                    -onlyUsePackageVersionsFromResolvedFile
+                  bash Scripts/patch-swift-sdk.sh
+
             - name: Build
-              run: xcodebuild -quiet -scheme iMCP -configuration Debug -destination "platform=macOS" build
+              run: |
+                  xcodebuild -quiet -project iMCP.xcodeproj -scheme iMCP \
+                    -configuration Debug -destination "platform=macOS" \
+                    -clonedSourcePackagesDirPath .sourcePackages \
+                    -disableAutomaticPackageResolution IMCP_WEATHERKIT_CONDITION='' build
 
             # The cache action's exclude pattern has not kept the module cache out of
             # the archive, and runner images with the same Xcode build can differ in

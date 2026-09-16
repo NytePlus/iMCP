@@ -13,19 +13,34 @@ actor WeChatResources {
     func register(_ value: Value) throws -> Value {
         cleanup()
         guard let obj = value.objectValue, let path = obj["path"]?.stringValue,
-              let id = obj["message_id"]?.stringValue, let size = obj["size"]?.intValue,
-              size <= 100 * 1024 * 1024 else { throw WeChatError.message("媒体返回值无效。") }
+            let id = obj["message_id"]?.stringValue, let size = obj["size"]?.intValue,
+            size <= 100 * 1024 * 1024
+        else { throw WeChatError.message("媒体返回值无效。") }
         let uri = "wechat://media/" + UUID().uuidString.lowercased()
         let mime = obj["mime_type"]?.stringValue ?? "application/octet-stream"
-        assets[uri] = Asset(url: URL(fileURLWithPath: path), messageID: id, mime: mime, size: size, expires: Date().addingTimeInterval(1800))
-        Task { try? await Task.sleep(for: .seconds(1800)); self.cleanup() }
-        return .object(["resource_uri": .string(uri), "mime_type": .string(mime), "size": .int(size), "expires_in_seconds": .int(1800)])
+        assets[uri] = Asset(
+            url: URL(fileURLWithPath: path),
+            messageID: id,
+            mime: mime,
+            size: size,
+            expires: Date().addingTimeInterval(1800)
+        )
+        Task {
+            try? await Task.sleep(for: .seconds(1800)); self.cleanup()
+        }
+        return .object([
+            "resource_uri": .string(uri), "mime_type": .string(mime), "size": .int(size),
+            "expires_in_seconds": .int(1800),
+        ])
     }
     func list() async -> [MCP.Resource] {
         cleanup()
         var result: [MCP.Resource] = []
         for (uri, asset) in assets {
-            guard (try? await WeChatBackend.shared.request("authorize_message", ["message_id": .string(asset.messageID)])) != nil else { continue }
+            guard
+                (try? await WeChatBackend.shared.request("authorize_message", ["message_id": .string(asset.messageID)]))
+                    != nil
+            else { continue }
             result.append(MCP.Resource(name: "WeChat media", uri: uri, mimeType: asset.mime, size: asset.size))
         }
         return result
@@ -49,5 +64,7 @@ actor WeChatResources {
 
 extension WeChatService: ResourceService {
     func resources() async -> [MCP.Resource] { await WeChatResources.shared.list() }
-    func readResource(_ uri: String) async throws -> MCP.Resource.Content? { try await WeChatResources.shared.read(uri) }
+    func readResource(_ uri: String) async throws -> MCP.Resource.Content? {
+        try await WeChatResources.shared.read(uri)
+    }
 }

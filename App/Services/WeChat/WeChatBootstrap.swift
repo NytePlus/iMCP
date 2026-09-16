@@ -16,7 +16,11 @@ enum WeChatBootstrap {
         }
         let token = random.map { String(format: "%02x", $0) }.joined()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wk-" + String(token.prefix(8)))
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700]
+        )
         let path = directory.appendingPathComponent("s").path
         guard path.utf8.count < 104 else { throw WeChatError.message("临时 socket 路径过长。") }
         let fd = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
@@ -27,13 +31,17 @@ enum WeChatBootstrap {
             path.utf8CString.withUnsafeBytes { source in buffer.copyBytes(from: source) }
         }
         let bound = withUnsafePointer(to: &address) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
         }
         guard bound == 0, Darwin.listen(fd, 1) == 0 else {
             Darwin.close(fd); try? FileManager.default.removeItem(at: directory)
             throw WeChatError.message("无法监听密钥传输 socket。")
         }
-        let command = [executable.path, path, token, account].map { "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'" }.joined(separator: " ")
+        let command = [executable.path, path, token, account].map {
+            "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        }.joined(separator: " ")
         let completion = Task.detached(priority: .userInitiated) {
             defer { Darwin.close(fd); try? FileManager.default.removeItem(at: directory) }
             var pollDescriptor = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
@@ -43,7 +51,9 @@ enum WeChatBootstrap {
             let handle = FileHandle(fileDescriptor: client, closeOnDealloc: true)
             defer { try? handle.close() }
             var timeout = timeval(tv_sec: 150, tv_usec: 0)
-            _ = withUnsafePointer(to: &timeout) { setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, $0, socklen_t(MemoryLayout<timeval>.size)) }
+            _ = withUnsafePointer(to: &timeout) {
+                setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, $0, socklen_t(MemoryLayout<timeval>.size))
+            }
             let hello = try receive(handle)
             guard hello["token"] == token else { throw WeChatError.message("无效的一次性令牌。") }
             try handle.write(contentsOf: Data([1]))
@@ -58,7 +68,9 @@ enum WeChatBootstrap {
         func exact(_ count: Int) throws -> Data {
             var data = Data()
             while data.count < count {
-                guard let bytes = try handle.read(upToCount: count-data.count), !bytes.isEmpty else { throw WeChatError.message("密钥传输中断。") }
+                guard let bytes = try handle.read(upToCount: count - data.count), !bytes.isEmpty else {
+                    throw WeChatError.message("密钥传输中断。")
+                }
                 data.append(bytes)
             }
             return data

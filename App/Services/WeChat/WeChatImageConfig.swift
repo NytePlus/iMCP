@@ -15,7 +15,8 @@ enum WeChatImageConfig {
             guard line.hasPrefix("last_uin=") else { return nil }
             let encoded = String(line.dropFirst(9)).trimmingCharacters(in: .whitespacesAndNewlines)
             guard let bytes = Data(base64Encoded: encoded), let uin = String(data: bytes, encoding: .utf8),
-                  !uin.isEmpty, uin.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+                !uin.isEmpty, uin.allSatisfy({ $0.isASCII && $0.isNumber })
+            else { return nil }
             return uin
         }
         guard Set(values).count == 1, let value = values.first else {
@@ -26,7 +27,12 @@ enum WeChatImageConfig {
     static func loadUIN(account: String) throws -> String? {
         guard let data = UserDefaults.standard.data(forKey: bookmarkKey(account)) else { return nil }
         var stale = false
-        let url = try URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &stale)
+        let url = try URL(
+            resolvingBookmarkData: data,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &stale
+        )
         guard !stale, url.startAccessingSecurityScopedResource() else {
             throw WeChatError.message("图片配置授权失效，请重新选择 config.ini。")
         }
