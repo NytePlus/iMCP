@@ -181,12 +181,17 @@ struct WeChatSettingsView: View {
         conversations = list.objectValue?["items"]?.arrayValue ?? []
     }
     private func makeStatusRows(_ values: [String: Value]) -> [StatusRow] {
+        var values = values
+        values["image_config_available"] = .bool(
+            values["image_key_configured"]?.boolValue == true
+                && values["image_config_unavailable"]?.boolValue != true
+        )
         let fields: [(String, String)] = [
             ("source_available", "源数据库可用"),
             ("sync_mode", "同步方式"),
             ("manual_sync_ready", "手动同步可用"),
             ("image_key_configured", "图片密钥已配置"),
-            ("image_config_unavailable", "图片配置不可用"),
+            ("image_config_available", "图片配置可用"),
             ("compatibility", "兼容性"),
             ("session_index_diagnostics", "会话索引诊断"),
             ("index_bytes", "归档索引大小"),
