@@ -36,8 +36,15 @@ messages appended with new rowids must still be imported. New numbered shards
 are discovered on each explicit sync, without consulting session timestamps.
 
 The archive and positions commit atomically. Failure leaves both unchanged;
-restart/retry resumes from the last successful commit. `get_updates` only reads
-the archive and explicitly returns `sync_mode: manual`, `source_checked: false`,
+restart/retry resumes from the last successful commit. Every archive read (`get_messages`, `search_messages`, `get_updates`,
+`list_members`, `get_message_context`, and media tool results) includes
+`last_synced_at`, the last successfully committed sync snapshot time in RFC3339,
+or null if never manually synced. Empty results retain this metadata. Conversation
+list/status entries report the timestamp per conversation; one conversation’s
+sync cannot make another appear fresh. Failed syncs do not advance the time.
+`wechat_sync` is an independent, non-read-only MCP tool.
+
+`get_updates` only reads the archive and explicitly returns `sync_mode: manual`, `source_checked: false`,
 `sync_required: true` and `last_synced_at` (null until a successful manual sync).
 `sync_required` means another explicit sync is needed to check source freshness,
 not that the source is known to contain new messages. `live_sync_ready` remains
