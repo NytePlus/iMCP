@@ -54,7 +54,7 @@ try:
     p.stdin.write(b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
     p.stdin.flush()
     status = tool('status', {})
-    print('source_available', status.get('source_available'), 'live_sync_ready', status.get('live_sync_ready'), flush=True)
+    print('source_available', status.get('source_available'), 'sync_mode', status.get('sync_mode'), 'manual_sync_ready', status.get('manual_sync_ready'), flush=True)
     print('image_key_configured',status.get('image_key_configured'),'image_config_unavailable',status.get('image_config_unavailable'),flush=True)
     print('session_index_diagnostics',status.get('session_index_diagnostics'),flush=True)
     found = tool('find_conversations', dict(query=conversation))['items']

@@ -88,6 +88,8 @@ struct WeChatSettingsView: View {
                 }
             }
             Section("持久授权") {
+                Text("消息仅在手动同步时更新；本次快照之后的新消息留待下次同步。首次同步会导入历史消息。")
+                    .font(.caption).foregroundStyle(.secondary)
                 TextField("群聊或联系人名称", text: $query)
                 Button("查找并授权") {
                     perform {
@@ -105,6 +107,13 @@ struct WeChatSettingsView: View {
                         }
                         Spacer()
                         if row["enabled"]?.boolValue == true {
+                            Button("手动同步") {
+                                perform {
+                                    _ = try await WeChatBackend.shared.request(
+                                        "sync", ["conversation": row["conversation_id"] ?? .null]
+                                    ); try await refresh()
+                                }
+                            }
                             Button("撤销（保留档案）") {
                                 perform {
                                     _ = try await WeChatBackend.shared.request(
@@ -174,7 +183,8 @@ struct WeChatSettingsView: View {
     private func makeStatusRows(_ values: [String: Value]) -> [StatusRow] {
         let fields: [(String, String)] = [
             ("source_available", "源数据库可用"),
-            ("live_sync_ready", "实时同步就绪"),
+            ("sync_mode", "同步方式"),
+            ("manual_sync_ready", "手动同步可用"),
             ("image_key_configured", "图片密钥已配置"),
             ("image_config_unavailable", "图片配置不可用"),
             ("compatibility", "兼容性"),
@@ -200,6 +210,7 @@ struct WeChatSettingsView: View {
             return value.formatted()
         case .double(let value): return value.formatted()
         case .string(let value):
+            if key == "sync_mode", value == "manual" { return "手动同步" }
             if key == "archive_semantics", value == "first_observed" { return "保留首次观测内容" }
             return value.isEmpty ? "无" : value
         case .array(let values):

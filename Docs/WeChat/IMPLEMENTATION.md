@@ -1,6 +1,6 @@
 # WeChat integration — implementation status
 
-This is a development build, not a completed real-time synchronization product.
+The WeChat integration uses explicit manual synchronization of approved conversations.
 Do not replace a working iMCP installation on the strength of a successful build.
 
 ## Implemented
@@ -17,37 +17,54 @@ Do not replace a working iMCP installation on the strength of a successful build
 - Indexed source-query guards; incompatible plans fail instead of scanning.
 - Release packaging script, inherited-sandbox Rust child, disabled Sparkle feed.
 
-## Blocking gaps (not acceptance passes)
+## Manual synchronization (issue #3)
 
-1. **Live synchronization is disabled.** `live_sync_ready` is false. A session
-   sort timestamp is not established as a durable modification sequence.
-   Equal/backdated timestamps, summaries that do not change, and late writes
-   cannot be proved discoverable from this watermark alone. A finite overlap
-   window cannot guarantee arbitrarily late writes.
-2. **No verified logarithmic shard router or k-way live merger exists yet.**
-   Upstream shard timestamp metadata is not proof of disjoint actual message
-   ranges. Overlapping or mutable historical shards can invalidate a binary
-   search. No fallback scans are enabled.
-3. Initial import now uses a separate rowid-keyset reader (128 rows per batch).
-   It does not require the live sort-sequence composite index. A one-time cursor
-   migration restarts incomplete imports without replacing first-seen bodies.
-   Optional TEXT/BLOB storage is supported for packed/compressed fields.
-4. Full nickname history, persistent runtime counters, full complexity CI,
-   live sleep/restart/late-write tests and performance budgets remain incomplete.
-5. Live MCP status now confirms `source_available:true`, but reports
-   `incompatible_session_range_index`. One user-approved group has completed
-   historical indexing and is queryable; real-time ingestion remains disabled.
-   The user reported disabling SIP themselves; no agent SIP modification was
-   performed. Key lifetime depends on account/key/encryption changes, not a
-   guarantee that extraction is needed exactly once forever.
-6. Local-signature TCC/Keychain continuity, sandbox helper execution and MCP
-   media clients require installed UI validation. WeatherKit is disabled in
-   the ad hoc build; official capabilities must not be assumed preserved.
+Use `wechat_sync(conversation)` or the per-conversation **手动同步** button.
+Approval alone does not import data. First sync imports history; later syncs
+resume the persisted `(conversation, shard, rowid)` positions. Existing archives
+and completed import positions are reused. There are no background import ticks
+or long-poll loops. `wait_seconds` is removed from the MCP schema; nonzero legacy
+values receive an explicit migration error.
 
-The complexity target remains `O(1 + log S + C + Δ log F)`, without steady
-`O(A)` or `O(M)`. Tests must not replace that target with current behavior.
-The ordinary upstream monitor and cache code remains vendored but is not used
-as the production synchronization path.
+All source shard read transactions are pinned before message ingestion starts.
+Each transaction observes committed rows at its own snapshot establishment time;
+SQLite cannot provide a single atomic instant across independent database files.
+Writes after a shard snapshot is pinned are left for the next manual sync, so an
+active chat cannot extend the operation indefinitely. `snapshot_started_at` is
+an observation time, not a filter on message `create_time`: delayed/backdated
+messages appended with new rowids must still be imported. New numbered shards
+are discovered on each explicit sync, without consulting session timestamps.
+
+The archive and positions commit atomically. Failure leaves both unchanged;
+restart/retry resumes from the last successful commit. `get_updates` only reads
+the archive and explicitly returns `sync_mode: manual`, `source_checked: false`,
+`sync_required: true` and `last_synced_at` (null until a successful manual sync).
+`sync_required` means another explicit sync is needed to check source freshness,
+not that the source is known to contain new messages. `live_sync_ready` remains
+false by design; a missing session range index no longer blocks manual sync.
+
+### Complexity and source contract
+
+For one requested conversation, only the Δ appended message rows are decoded
+and inserted, in 128-row keyset pages. SQL plan guards require indexed rowid
+range searches and reject full scans / temporary sorting. There is no historical
+message COUNT, OFFSET, rescan or re-decryption. Work is independent of historical
+message count except B-tree seeks/inserts: `O(F + F log N + Δ log N)` including
+shard discovery/seeks and archive/FTS maintenance; row visits/decoding are `O(Δ)`.
+F is the number of source shards. Strict total `O(Δ)` with zero shard/index
+metadata cost is not possible without a source change log. First import costs
+O(history), and the archive adds its update-query index once during migration.
+
+This is append synchronization with first-observed retention. Increasing rowids
+capture equal/older timestamps and new rows in old shards, but do not discover
+in-place edits, deletion/reinsertion with reused rowids, or a replaced source DB.
+Lossless mutation capture would require a durable source change log. The upstream
+watch/serve monitors remain vendored and are not used by the iMCP app.
+
+Full native authorization/sandbox/media acceptance and performance budgets remain
+separate from component tests. Manual sync has a 300-second client timeout;
+a timed-out transaction is rolled back and can be retried. Very large initial
+imports may still require a future resumable snapshot job API.
 
 ## Build and test
 

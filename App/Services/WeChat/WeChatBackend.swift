@@ -142,7 +142,7 @@ actor WeChatBackend {
         var frame = withUnsafeBytes(of: &length) { Data($0) }; frame.append(payload)
         // Bound a stalled backend even if it stops reading/writing its pipes.
         let timeout = DispatchWorkItem { if process.isRunning { process.terminate() } }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeout)
+        DispatchQueue.global().asyncAfter(deadline: .now() + (method == "sync" ? 300 : 30), execute: timeout)
         defer { timeout.cancel() }
         try input.write(contentsOf: frame)
         let header = try readExactly(4, from: output)
