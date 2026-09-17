@@ -31,6 +31,8 @@ actor WeChatResources {
         return .object([
             "resource_uri": .string(uri), "mime_type": .string(mime), "size": .int(size),
             "expires_in_seconds": .int(1800),
+            "last_synced_at": obj["last_synced_at"] ?? .null,
+            "sync_mode": obj["sync_mode"] ?? .string("manual"),
         ])
     }
     func list() async -> [MCP.Resource] {

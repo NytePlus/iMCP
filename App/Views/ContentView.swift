@@ -112,9 +112,6 @@ struct ContentView: View {
                     openSettings()
                 }
 
-                Text("WeChat 自用构建 · 自动更新已关闭")
-                    .font(.caption).foregroundStyle(.secondary)
-
                 MenuButton("About iMCP", isMenuPresented: $isMenuPresented) {
                     aboutWindowController.showWindow(nil)
                     NSApp.activate(ignoringOtherApps: true)

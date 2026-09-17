@@ -25,7 +25,9 @@ git submodule update --init --recursive
 ```
 
 The WeChat module supports authorized historical-message queries and media.
-**Real-time synchronization is not yet enabled.** See the
+**Use manual synchronization:** click 手动同步 in WeChat settings or call
+`wechat_sync` for an approved conversation, then query the archive. Each sync
+reads a finite source snapshot; later arrivals wait for the next sync. See the
 [implementation status](Docs/WeChat/IMPLEMENTATION.md) and
 [fork/submodule workflow](Docs/WeChat/REPOSITORIES.md) before building.
 The upstream installation instructions below install upstream iMCP, not this fork.
@@ -38,7 +40,7 @@ The upstream installation instructions below install upstream iMCP, not this for
       <img src="Assets/wechat.svg" width="48" height="48" alt="" role="presentation"/>
     </th>
     <td><strong>WeChat</strong></td>
-    <td>Access authorized historical messages and media with conversation-level approval. Real-time synchronization is not yet enabled.</td>
+    <td>Access authorized historical messages and media with conversation-level approval. Manually sync a finite source snapshot with <code>wechat_sync</code>.</td>
   </tr>
   <tr>
     <th>
