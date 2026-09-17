@@ -53,7 +53,8 @@ final class WeChatService: Service, @unchecked Sendable {
         return definitions.map { name, description, properties, required in
             Tool(
                 name: "wechat_" + name,
-                description: description + (name == "request_access" ? "" : " 查阅结果包含 last_synced_at（上次成功同步的快照时间，未同步为 null）；会话列表中按会话返回。"),
+                description: description
+                    + (name == "request_access" ? "" : " 查阅结果包含 last_synced_at（上次成功同步的快照时间，未同步为 null）；会话列表中按会话返回。"),
                 inputSchema: .object(
                     properties: .init(uniqueKeysWithValues: properties.sorted { $0.key < $1.key }),
                     required: required,

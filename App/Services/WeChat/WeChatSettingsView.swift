@@ -110,7 +110,8 @@ struct WeChatSettingsView: View {
                             Button("手动同步") {
                                 perform {
                                     _ = try await WeChatBackend.shared.request(
-                                        "sync", ["conversation": row["conversation_id"] ?? .null]
+                                        "sync",
+                                        ["conversation": row["conversation_id"] ?? .null]
                                     ); try await refresh()
                                 }
                             }
